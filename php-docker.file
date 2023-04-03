@@ -1,0 +1,5 @@
+from php:8.1-fpm-alpine
+
+run apk add libpq-dev libpq && docker-php-ext-install pdo_pgsql && apk del libpq-dev
+run wget https://getcomposer.org/installer && \
+    php installer --install-dir='/usr/bin' --filename='composer'
