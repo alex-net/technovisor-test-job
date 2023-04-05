@@ -2,38 +2,49 @@
 
 namespace app\models;
 
-class User extends \yii\base\BaseObject implements \yii\web\IdentityInterface
-{
-    public $id;
-    public $username;
-    public $password;
-    public $authKey;
-    public $accessToken;
+use Yii;
+use yii\base\Model;
+use yii\base\Security;
+use yii\web\IdentityInterface;
+use yii\helpers\ArrayHelper;
+use yii\data\SqlDataProvider;
 
-    private static $users = [
-        '100' => [
-            'id' => '100',
-            'username' => 'admin',
-            'password' => 'admin',
-            'authKey' => 'test100key',
-            'accessToken' => '100-token',
-        ],
-        '101' => [
-            'id' => '101',
-            'username' => 'demo',
-            'password' => 'demo',
-            'authKey' => 'test101key',
-            'accessToken' => '101-token',
-        ],
+/**
+ * Модель пользователя ..
+ */
+class User extends Model implements IdentityInterface, DictInterface
+{
+    use CrudDictTrait;
+
+    const TBL = '{{%employees}}';
+
+    const ROLE_USER = 'user';
+    const ROLE_ADMIN = 'admin';
+
+    const PERM_ALLRULE = 'all-rules';
+
+    const ROLES = [
+        self::ROLE_ADMIN => 'Администратор',
+        self::ROLE_USER => 'Пользователь',
     ];
 
+    const SCENARIO_LOGIN = 'user-login';
+
+    public $id, $fio, $role, $active, $pass, $authKey;
+    private $oldPass;
+
+    public function init()
+    {
+        parent::init();
+        $this->oldPass = $this->pass;
+    }
 
     /**
      * {@inheritdoc}
      */
     public static function findIdentity($id)
     {
-        return isset(self::$users[$id]) ? new static(self::$users[$id]) : null;
+        return static::getById($id);
     }
 
     /**
@@ -41,31 +52,14 @@ class User extends \yii\base\BaseObject implements \yii\web\IdentityInterface
      */
     public static function findIdentityByAccessToken($token, $type = null)
     {
-        foreach (self::$users as $user) {
-            if ($user['accessToken'] === $token) {
-                return new static($user);
-            }
-        }
-
         return null;
     }
 
-    /**
-     * Finds user by username
-     *
-     * @param string $username
-     * @return static|null
-     */
-    public static function findByUsername($username)
+    public static function getIdsPerRole($role)
     {
-        foreach (self::$users as $user) {
-            if (strcasecmp($user['username'], $username) === 0) {
-                return new static($user);
-            }
-        }
-
-        return null;
+        return Yii::$app->db->createCommand('select id from {{%employees}} where role = :role', [':role' => $role])->queryColumn();
     }
+
 
     /**
      * {@inheritdoc}
@@ -99,6 +93,79 @@ class User extends \yii\base\BaseObject implements \yii\web\IdentityInterface
      */
     public function validatePassword($password)
     {
-        return $this->password === $password;
+        return $this->pass && Yii::$app->security->validatePassword($password, $this->pass);
+    }
+
+    public function rules()
+    {
+        $rules = [
+            [['fio', 'pass'], 'trim', 'on' => static::SCENARIO_DEFAULT],
+            ['pass', 'string'],
+            ['role', 'default', 'value' => static::ROLE_USER],
+            ['fio', 'string', 'max' => 100, 'on' => static::SCENARIO_DEFAULT],
+            ['role', 'in', 'range' => array_keys(static::ROLES), 'on' => static::SCENARIO_DEFAULT],
+            [['fio', 'role'], 'required', 'on' => static::SCENARIO_DEFAULT],
+            ['active', 'boolean', 'on' => static::SCENARIO_DEFAULT],
+            [['id', 'pass'], 'required', 'on' => static::SCENARIO_LOGIN, 'message' => 'Поле обязательно для заполнения'],
+            ['id', 'in', 'range' => array_keys($this->getOptionList('fio', ['active' => true])), 'on' => static::SCENARIO_LOGIN],
+            ['pass', 'passValidator', 'on' => static::SCENARIO_LOGIN],
+            ['authKey', 'default', 'value' => Yii::$app->security->generateRandomString(), 'on' => static::SCENARIO_DEFAULT],
+        ];
+        if (!$this->id) {
+            $rules[] = ['pass', 'required', 'on' => static::SCENARIO_DEFAULT];
+        }
+
+        return $rules;
+    }
+
+    public function passValidator($attr)
+    {
+        if ($this->id) {
+            $u = static::findIdentity($this->id);
+
+            if (!$u->validatePassword($this->pass)) {
+                $this->addError($attr, 'Неверный пароль');
+            }
+            if (!$u->active) {
+                $this->addError($attr, 'Доступ запрещён');
+            }
+        }
+    }
+
+    public function attributeLabels()
+    {
+        return [
+            'fio' => 'ФИО',
+            'role' => 'Роль',
+            'active' => 'Активный',
+            'pass' => 'Пароль',
+        ];
+    }
+
+    public function save($data = [])
+    {
+        if ($data && !$this->load($data) || !$this->validate()) {
+            return false;
+        }
+
+        if ($this->pass && ($this->oldPass != $this->pass || !$this->id)) {
+            $this->pass = Yii::$app->security->generatePasswordHash($this->pass);
+        }
+
+        $this->saveObj();
+
+        return true;
+    }
+
+
+    public static function getForList()
+    {
+        return new SqlDataProvider([
+            'sql' => 'select id, fio, active from {{%employees}}',
+            'sort' => [
+                'attributes' => ['fio', 'active', 'id'],
+                'defaultOrder' => ['fio' => SORT_ASC],
+            ],
+        ]);
     }
 }

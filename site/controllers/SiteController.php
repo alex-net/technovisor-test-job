@@ -7,8 +7,9 @@ use yii\filters\AccessControl;
 use yii\web\Controller;
 use yii\web\Response;
 use yii\filters\VerbFilter;
-use app\models\LoginForm;
-use app\models\ContactForm;
+
+use app\models\User;
+
 
 class SiteController extends Controller
 {
@@ -75,12 +76,13 @@ class SiteController extends Controller
             return $this->goHome();
         }
 
-        $model = new LoginForm();
-        if ($model->load(Yii::$app->request->post()) && $model->login()) {
+        $model = new User(['scenario' => User::SCENARIO_LOGIN]);
+        if ($this->request->isPost &&  $model->load(Yii::$app->request->post()) && $model->validate() ) {
+            Yii::$app->user->login($model);
             return $this->goBack();
         }
 
-        $model->password = '';
+        $model->pass = '';
         return $this->render('login', [
             'model' => $model,
         ]);

@@ -43,14 +43,20 @@ $config = [
             ],
         ],
         'db' => $db,
-        /*
+        'authManager' => \yii\rbac\PhpManager::class,
+        'assetManager' => [
+            'linkAssets' => true,
+        ],
+
+
         'urlManager' => [
             'enablePrettyUrl' => true,
             'showScriptName' => false,
             'rules' => [
+
             ],
         ],
-        */
+
     ],
     'params' => $params,
 ];

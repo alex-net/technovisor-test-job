@@ -10,6 +10,8 @@ use yii\bootstrap5\Html;
 use yii\bootstrap5\Nav;
 use yii\bootstrap5\NavBar;
 
+use app\models\User;
+
 AppAsset::register($this);
 
 $this->registerCsrfMetaTags();
@@ -40,13 +42,23 @@ $this->registerLinkTag(['rel' => 'icon', 'type' => 'image/x-icon', 'href' => Yii
         'options' => ['class' => 'navbar-nav'],
         'items' => [
             ['label' => 'Home', 'url' => ['/site/index']],
+            ['label' => 'Списки', 'items'=> [
+                ['label' => 'Сотрудники', 'url' => ['users-dict/index']],
+                ['label' => 'Поставщики', 'url' => ['providers-dict/index']],
+                ['label' => 'Заказы', 'url' => ['orders-dict/index']],
+            ], 'visible' => Yii::$app->user->can(User::PERM_ALLRULE )],
+            ['label' => 'Отчёты', 'items' => [
+                ['label' => 'Заказ поставщику на дату', 'url' => ['reports/provider-per-date']],
+                ['label' => 'Заказ Сотрудников на дату/месяц', 'url' => ['reports/employees-per-date']],
+            ], 'visible' => Yii::$app->user->can(User::PERM_ALLRULE )],
             ['label' => 'About', 'url' => ['/site/about']],
+            ['label' => 'Кабинет', 'url' => ['cabinet/index'], 'visible' => !Yii::$app->user->isGuest],
             Yii::$app->user->isGuest
                 ? ['label' => 'Login', 'url' => ['/site/login']]
                 : '<li class="nav-item">'
                     . Html::beginForm(['/site/logout'])
                     . Html::submitButton(
-                        'Logout (' . Yii::$app->user->identity->username . ')',
+                        'Logout (' . Yii::$app->user->identity->fio . ')',
                         ['class' => 'nav-link btn btn-link logout']
                     )
                     . Html::endForm()
